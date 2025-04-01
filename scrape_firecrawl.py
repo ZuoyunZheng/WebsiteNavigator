@@ -43,7 +43,10 @@ def main(args):
     else:
         # Scrape website
         loader = FireCrawlLoader(
-            api_key=FIRECRAWL_API_KEY, url=args.website, mode="scrape"
+            api_key=FIRECRAWL_API_KEY,
+            api_url="http://localhost:3002",
+            url=args.website,
+            mode="scrape",
         )
 
         pages = []
@@ -71,7 +74,8 @@ def main(args):
         )
 
     # Initialize Ollama LLM for RAG
-    llm = OllamaLLM(model="mistral:latest")
+    # llm = OllamaLLM(model="mistral:latest")
+    llm = OllamaLLM(model="deepseek-r1:1.5b")
 
     # Prompts and graphs
     prompt = hub.pull("rlm/rag-prompt")
