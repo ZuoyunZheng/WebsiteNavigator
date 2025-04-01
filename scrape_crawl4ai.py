@@ -1,26 +1,27 @@
 from langchain_core.documents import Document
-from langchain_community.document_loaders.firecrawl import FireCrawlLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_postgres import PGVector
 from langchain_ollama.llms import OllamaLLM
 from langgraph.graph import START, StateGraph
 from langchain import hub
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from typing_extensions import List, TypedDict
 
 from dotenv import load_dotenv
 import os
+import asyncio
 
 load_dotenv()
 
-FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
 POSTGRES_USERNAME = os.getenv("POSTGRES_USERNAME")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-PG_CONNECTION_STRING = f"postgresql+psycopg2://{POSTGRES_USERNAME}:{POSTGRES_PASSWORD}@localhost:5432/firecrawl"
+PG_CONNECTION_STRING = f"postgresql+psycopg2://{POSTGRES_USERNAME}:{POSTGRES_PASSWORD}@localhost:5432/crawl4ai"
 COLLECTION_NAME = "website"
 
 
-def main(args):
+async def main(args):
     COLLECTION_NAME = args.website.split(".")[1]
     print(COLLECTION_NAME)
     # Initialize Ollama embedding model
@@ -42,21 +43,16 @@ def main(args):
         )
     else:
         # Scrape website
-        loader = FireCrawlLoader(
-            api_key=FIRECRAWL_API_KEY,
-            api_url="http://localhost:3002",
-            url=args.website,
-            mode="scrape",
-        )
-
         pages = []
-        for doc in loader.lazy_load():
-            pages.append(doc)
-            if len(pages) >= 10:
-                break
-                # do some paged operation, e.g.
-                # index.upsert(page)
-                pages = []
+        config = CrawlerRunConfig(
+            deep_crawl_strategy=BFSDeepCrawlStrategy(max_depth=5),
+            verbose=True,
+        )
+        async with AsyncWebCrawler() as crawler:
+            pages = await crawler.arun(args.website, config=config)
+        pages = [
+            Document(page_content=p.markdown, metadata={"url": p.url}) for p in pages
+        ]
 
         # Split text into chunks
         text_splitter = RecursiveCharacterTextSplitter(
@@ -117,4 +113,4 @@ if __name__ == "__main__":
         default="Describe the paid plans and designated clientele of the company.",
     )
     args = parser.parse_args()
-    main(args)
+    asyncio.run(main(args))
